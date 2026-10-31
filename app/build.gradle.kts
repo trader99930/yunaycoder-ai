@@ -33,7 +33,7 @@ android {
         create("release") {
             storeFile = file("release.jks")
             storePassword = "123456"
-            keyAlias = "yunaycoder-ai"
+            keyAlias = "yunaycoder"
             keyPassword = "123456"
         }
     }
