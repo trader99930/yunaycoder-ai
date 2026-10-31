@@ -1,16 +1,11 @@
 {
-  "version_code": 118,
-  "version_name": "1.0.17",
+  "version_code": 119,
+  "version_name": "1.0.18",
   "min_supported_version_code": 1,
   "changelog": [
-    "AGY Hub auto-starts in the background on app launch without blocking the bridge API or shutdown",
-    "Fixed 'text file busy' security-header patch failure when restarting while an old AGY process is still running",
-    "Added automatic AGY Hub restart with exponential backoff (2s-30s, max 5 attempts) after unexpected crashes",
-    "Hub readiness timeout and early process exit now surface clear errors with captured logs instead of staying stuck",
-    "Added automatic local bridge restart after unexpected exits (user stop is not restarted)",
-    "Fixed stale CSRF token causing MCP servers and RPC calls to fail after a hub restart (auto refresh + one retry)",
-    "Increased localhost health-check timeouts so a busy proot rootfs is not reported offline",
-    "Restored the termux rootfs download URL broken during rebranding"
+    "Restored the proot and loader executables that were corrupted during rebranding (AArch64 ELF headers were damaged, so proot could not start and the Antigravity Hub never came online)",
+    "Local Linux environment (proot Ubuntu) now boots again, so the AGY Hub starts on port 1237 and chats/MCP servers load",
+    "Includes 1.0.17 hub hardening: background hub start, crash auto-restart with backoff, CSRF refresh/retry and bridge auto-restart"
   ],
-  "is_critical": false
+  "is_critical": true
 }
