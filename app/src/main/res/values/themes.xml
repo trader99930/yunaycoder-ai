@@ -11,7 +11,7 @@
     </style>
 
     <!-- Facebook Messenger-style Floating Multitasking Window Theme -->
-    <style name="Theme.YunayCoder AI.FloatingTranslucent" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.YunayCoderAi.FloatingTranslucent" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
