@@ -568,9 +568,13 @@ func main() {
 	}
 
 	if shouldStartHub {
-		if err := hubMgr.Start(); err != nil {
-			fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
-		}
+		// Run the supervisor off the main goroutine so the HTTP API and SIGTERM handling stay responsive
+		// while agy --hub is starting (startup can take minutes on a cold proot rootfs).
+		go func() {
+			if err := hubMgr.Start(); err != nil {
+				fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
+			}
+		}()
 	}
 
 	<-stopChan

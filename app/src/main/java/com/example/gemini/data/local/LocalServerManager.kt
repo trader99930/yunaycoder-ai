@@ -40,6 +40,12 @@ object LocalServerManager {
     private var exitObserverJob: Job? = null
     private var activeJob: Job? = null
 
+    // Crash supervision: an unexpected bridge exit is restarted automatically; a user stop is not.
+    private var stopRequested = false
+    private var autoRestartAttempts = 0
+    private var autoRestartJob: Job? = null
+    private const val MAX_AUTO_RESTARTS = 5
+
     // Track whether auto-start has already run during the lifetime of this app process
     private var hasInitialAutoStarted = false
 
@@ -310,6 +316,7 @@ object LocalServerManager {
     }
 
     private suspend fun startServerInternal(context: Context, forceRestart: Boolean) {
+        stopRequested = false
         val current = _status.value
         val existingSession = _serverSession.value
 
@@ -368,12 +375,42 @@ object LocalServerManager {
         _status.value = LocalServerStatus.Running()
 
         exitObserverJob?.cancel()
+        val sessionStartedAt = System.currentTimeMillis()
         exitObserverJob = managerScope.launch {
             session.isExited.collect { isExited ->
-                if (isExited) {
-                    _status.value = LocalServerStatus.Stopped(exitCode = 0)
+                if (!isExited) return@collect
+                _status.value = LocalServerStatus.Stopped(exitCode = 0)
+                if (stopRequested) return@collect
+                // The bridge/web server died unexpectedly (crash, OOM kill, port conflict): bring it back.
+                if (System.currentTimeMillis() - sessionStartedAt >= 60_000L) {
+                    autoRestartAttempts = 0
                 }
+                scheduleAutoRestart(appContext)
             }
+        }
+    }
+
+    /**
+     * Restarts the local bridge after an unexpected exit with exponential backoff (2s..30s, max 5 attempts).
+     * A user-requested stop sets [stopRequested] and never triggers a restart.
+     */
+    private fun scheduleAutoRestart(context: Context) {
+        if (stopRequested) return
+        if (autoRestartAttempts >= MAX_AUTO_RESTARTS) {
+            Log.e(TAG, "[ServerManager] Local server exited repeatedly; giving up after $MAX_AUTO_RESTARTS restart attempts")
+            _status.value = LocalServerStatus.Error("Local server exited repeatedly ($MAX_AUTO_RESTARTS attempts). Tap restart.")
+            return
+        }
+        autoRestartAttempts++
+        val attempt = autoRestartAttempts
+        val delayMs = minOf(30_000L, (1L shl (attempt - 1)) * 2_000L)
+        Log.w(TAG, "[ServerManager] Local server exited unexpectedly; auto-restart in ${delayMs}ms (attempt $attempt/$MAX_AUTO_RESTARTS)")
+        autoRestartJob?.cancel()
+        autoRestartJob = managerScope.launch {
+            delay(delayMs)
+            if (stopRequested) return@launch
+            Log.d(TAG, "[ServerManager] Auto-restarting local server (attempt $attempt/$MAX_AUTO_RESTARTS)")
+            startServerInternal(context, forceRestart = true)
         }
     }
 
@@ -385,6 +422,10 @@ object LocalServerManager {
     }
 
     private suspend fun stopServerInternal() {
+        stopRequested = true
+        autoRestartJob?.cancel()
+        autoRestartJob = null
+        autoRestartAttempts = 0
         _status.value = LocalServerStatus.Stopping
 
         val bridgeUrl = AuthPreferences.currentBridgeHttpUrl

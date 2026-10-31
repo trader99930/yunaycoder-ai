@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit
  * Configured with high multiplexing dispatcher, connection pooling, timeouts, and dynamic CSRF token evaluation.
  */
 object AgyOkHttpClient {
+    private const val CSRF_RETRY_HEADER = "X-YunayCoder-Csrf-Retry"
+
     val client: OkHttpClient by lazy {
         val dispatcher = Dispatcher().apply {
             maxRequests = 256
@@ -32,35 +34,65 @@ object AgyOkHttpClient {
         }
 
         builder.addInterceptor { chain ->
+                val original = chain.request()
                 val hubUrl = AuthPreferences.currentHubUrl
-                var token = AgyCsrfManager.instance.token
-                if (token.isBlank()) {
-                    try {
-                        val status = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                            com.example.gemini.data.remote.AgyBridgeService.instance.fetchServerStatus(AuthPreferences.currentBridgeHttpUrl)
-                        }
-                        if (!status?.csrfToken.isNullOrBlank()) {
-                            token = status.csrfToken
-                        }
-                    } catch (_: Exception) {}
-                }
 
-                val request = chain.request().newBuilder()
+                val request = original.newBuilder()
                     .header("User-Agent", "yunayCoderAi-Android-Native")
                     .header("X-Grpc-Web", "1")
-                    .header(AuthPreferences.currentFramedHeader, token.ifBlank { "true" })
+                    .header(AuthPreferences.currentFramedHeader, currentCsrfToken().ifBlank { "true" })
                     .build()
 
                 val response = chain.proceed(request)
 
                 // Check for CSRF expiry (HTTP 401/403 or gRPC status 16 UNAUTHENTICATED)
                 val isCsrfError = response.code == 401 || response.code == 403 || response.header("grpc-status") == "16"
-                if (isCsrfError) {
-                    AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, chain.request().url.encodedPath)
-                }
+                if (!isCsrfError) return@addInterceptor response
 
-                response
+                AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, original.url.encodedPath)
+
+                // The hub patches a fresh header into the AGY binary when it restarts, so the cached token can be
+                // stale. Refresh it from the bridge and retry the request exactly once.
+                if (original.header(CSRF_RETRY_HEADER) != null) return@addInterceptor response
+                val freshToken = refreshCsrfToken()
+                if (freshToken.isBlank()) return@addInterceptor response
+
+                val retried = original.newBuilder()
+                    .header("User-Agent", "yunayCoderAi-Android-Native")
+                    .header("X-Grpc-Web", "1")
+                    .header(AuthPreferences.currentFramedHeader, freshToken)
+                    .header(CSRF_RETRY_HEADER, "1")
+                    .build()
+
+                response.close()
+                chain.proceed(retried)
             }
             .build()
+    }
+
+    private fun currentCsrfToken(): String {
+        val cached = AgyCsrfManager.instance.token
+        if (cached.isNotBlank()) return cached
+        return fetchCsrfTokenFromBridge()
+    }
+
+    private fun refreshCsrfToken(): String {
+        AgyCsrfManager.instance.clearToken()
+        return fetchCsrfTokenFromBridge()
+    }
+
+    private fun fetchCsrfTokenFromBridge(): String {
+        return try {
+            val status = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                com.example.gemini.data.remote.AgyBridgeService.instance.fetchServerStatus(AuthPreferences.currentBridgeHttpUrl)
+            }
+            val token = status?.csrfToken.orEmpty()
+            if (token.isNotBlank()) {
+                AgyCsrfManager.instance.setCachedToken(AuthPreferences.currentHubUrl, token)
+            }
+            token
+        } catch (_: Exception) {
+            ""
+        }
     }
 }

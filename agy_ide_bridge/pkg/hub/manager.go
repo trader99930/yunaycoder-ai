@@ -58,10 +58,18 @@ type HubManager struct {
 	lastError   string
 	isRunning   bool
 	isExternal  bool
+	stopping    bool
+	restarting  bool
+	restartCount int
+	onlineSince time.Time
 	processDone chan struct{}
 	monitorStop chan struct{}
 	recentLogs  []string
 	mu          sync.Mutex
+	startMu     sync.Mutex
+	probeMu     sync.Mutex
+	lastProbeAt time.Time
+	lastProbeOK bool
 }
 
 // FindAllAgyBinaries discovers all existing AGY binaries in candidate paths and PATH.
@@ -211,15 +219,28 @@ func (m *HubManager) isHubReady() bool {
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 400*time.Millisecond)
 	elapsed := time.Since(start)
-
-	if err != nil {
-		log.Printf("\033[90m[Hub Probe] 127.0.0.1:%s -> Not connected (%v in %v) | Assumed state: offline\033[0m", m.HubPort, err, elapsed)
-		return false
+	active := err == nil
+	if active {
+		_ = conn.Close()
 	}
-	_ = conn.Close()
 
-	log.Printf("\033[32m[Hub Probe] 127.0.0.1:%s -> TCP Connected OK in %v | Assumed state: ONLINE\033[0m", m.HubPort, elapsed)
-	return true
+	// Throttle the probe log: state changes are logged immediately, otherwise at most once every 30s.
+	m.probeMu.Lock()
+	shouldLog := active != m.lastProbeOK || time.Since(m.lastProbeAt) >= 30*time.Second
+	if shouldLog {
+		m.lastProbeOK = active
+		m.lastProbeAt = time.Now()
+	}
+	m.probeMu.Unlock()
+
+	if shouldLog {
+		if active {
+			log.Printf("\033[32m[Hub Probe] 127.0.0.1:%s -> TCP Connected OK in %v | Assumed state: ONLINE\033[0m", m.HubPort, elapsed)
+		} else {
+			log.Printf("\033[90m[Hub Probe] 127.0.0.1:%s -> Not connected (%v in %v) | Assumed state: offline\033[0m", m.HubPort, err, elapsed)
+		}
+	}
+	return active
 }
 
 // FetchCsrfToken attempts to retrieve the active CSRF token directly from the Hub root endpoint.
@@ -332,6 +353,7 @@ func (m *HubManager) StartContinuousMonitor() {
 				return
 			case <-time.After(interval):
 				active := m.isHubReady()
+
 				m.mu.Lock()
 				currentStatus := m.status
 				if active {
@@ -347,18 +369,30 @@ func (m *HubManager) StartContinuousMonitor() {
 					}
 					if currentStatus != HubStatusOnline || tokenAcquired {
 						m.isRunning = true
+						m.onlineSince = time.Now()
 						m.setStatusLocked(HubStatusOnline, "")
 						log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s (CSRF token present: %t)", m.HubPort, m.csrfToken != "")
 					}
-				} else {
-					if currentStatus == HubStatusOnline || currentStatus == HubStatusStarting {
-						m.isRunning = false
-						m.csrfToken = ""
-						m.setStatusLocked(HubStatusStopped, "")
-						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
-					}
+					m.mu.Unlock()
+					continue
 				}
+
+				// Port is unreachable. Only an ONLINE hub transitions to stopped here; a hub that is still
+				// starting is left alone because Start() owns that transition and its readiness timeout.
+				if currentStatus != HubStatusOnline {
+					m.mu.Unlock()
+					continue
+				}
+				m.isRunning = false
+				m.csrfToken = ""
+				m.setStatusLocked(HubStatusStopped, "")
+				shouldRestart := !m.isExternal && !m.stopping && !m.Disabled
 				m.mu.Unlock()
+
+				log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
+				if shouldRestart {
+					m.scheduleRestart()
+				}
 			}
 		}
 	}()
@@ -372,8 +406,52 @@ func (m *HubManager) IsPortActive() bool {
 // IsRunning reports whether the hub process is active.
 func (m *HubManager) IsRunning() bool {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.isRunning || m.isHubReady()
+	running := m.isRunning
+	m.mu.Unlock()
+	return running || m.isHubReady()
+}
+
+// scheduleRestart restarts the hub after an unexpected exit with exponential backoff (2s..30s, max 5 attempts).
+func (m *HubManager) scheduleRestart() {
+	m.mu.Lock()
+	if m.Disabled || m.stopping || m.isExternal || m.restarting {
+		m.mu.Unlock()
+		return
+	}
+	// A hub that stayed healthy for a minute or more gets a fresh restart budget.
+	if !m.onlineSince.IsZero() && time.Since(m.onlineSince) >= 60*time.Second {
+		m.restartCount = 0
+	}
+	if m.restartCount >= 5 {
+		m.mu.Unlock()
+		m.setStatus(HubStatusError, "AGY Hub crashed repeatedly; automatic restart gave up after 5 attempts")
+		return
+	}
+	m.restarting = true
+	m.restartCount++
+	attempt := m.restartCount
+	m.mu.Unlock()
+
+	delay := time.Duration(1<<uint(attempt-1)) * 2 * time.Second
+	if delay > 30*time.Second {
+		delay = 30 * time.Second
+	}
+	log.Printf("\033[1;33m[Hub Supervisor]\033[0m Restarting AGY Hub in %v (attempt %d/5)...", delay, attempt)
+
+	go func() {
+		time.Sleep(delay)
+		m.mu.Lock()
+		stopping := m.stopping
+		m.restarting = false
+		m.mu.Unlock()
+		if stopping || m.Disabled {
+			return
+		}
+		if err := m.Start(); err != nil {
+			log.Printf("\033[1;31m[Hub Supervisor]\033[0m Restart attempt %d failed: %v", attempt, err)
+			m.scheduleRestart()
+		}
+	}()
 }
 
 // Start launches agy --hub with interactive feedback, a spinner, and non-blocking update bypass.
@@ -381,11 +459,15 @@ func (m *HubManager) Start() error {
 	if m.Disabled {
 		return fmt.Errorf("Antigravity is turned off in the app")
 	}
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+
 	m.mu.Lock()
 	// 1. Check if already active and responding to RPC requests
 	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
+		m.onlineSince = time.Now()
 		m.mu.Unlock()
 		tok := m.FetchCsrfToken()
 		m.mu.Lock()
@@ -403,6 +485,7 @@ func (m *HubManager) Start() error {
 	if m.AgyBinPath == "" {
 		err := fmt.Errorf("AGY executable binary not specified or found")
 		m.setStatusLocked(HubStatusError, err.Error())
+		m.mu.Unlock()
 		return err
 	}
 
@@ -412,13 +495,45 @@ func (m *HubManager) Start() error {
 		if patchTarget == "" {
 			err := fmt.Errorf("AGY executable binary not found for security header patching")
 			m.setStatusLocked(HubStatusError, err.Error())
+			m.mu.Unlock()
 			return err
 		}
-		patchedHeader, elapsed, err := security.PatchAgyHeader(patchTarget, m.SecurityToken)
-		if err != nil {
-			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", patchTarget, err)
+
+		var patchedHeader string
+		var elapsed time.Duration
+		var patchErr error
+		for attempt := 1; attempt <= 3; attempt++ {
+			patchedHeader, elapsed, patchErr = security.PatchAgyHeader(patchTarget, m.SecurityToken)
+			if patchErr == nil {
+				break
+			}
+			if attempt < 3 {
+				log.Printf("\033[1;33m[Security]\033[0m Patch attempt %d failed (%v); retrying in 400ms...", attempt, patchErr)
+				time.Sleep(400 * time.Millisecond)
+			}
+		}
+		if patchErr != nil {
+			// A running/hung hub can hold the binary (ETXTBSY). If the port is already serving, reuse it
+			// instead of failing the whole startup.
+			if m.isHubReady() {
+				m.isRunning = true
+				m.isExternal = true
+				m.onlineSince = time.Now()
+				m.mu.Unlock()
+				tok := m.FetchCsrfToken()
+				m.mu.Lock()
+				if tok != "" {
+					m.csrfToken = tok
+				}
+				m.setStatusLocked(HubStatusOnline, "")
+				m.mu.Unlock()
+				log.Printf("\033[1;33m[Security]\033[0m Patch failed (%v) but a hub is already serving on port %s -> using it", patchErr, m.HubPort)
+				return nil
+			}
+			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", patchTarget, patchErr)
 			log.Printf("\033[1;31m[Security Fatal]\033[0m %s", errMsg)
 			m.setStatusLocked(HubStatusError, errMsg)
+			m.mu.Unlock()
 			return errors.New(errMsg)
 		}
 		log.Printf("\033[1;32m[Security]\033[0m In-place patched AGY binary (%s) in %v -> Active Header: %s", patchTarget, elapsed, patchedHeader)
@@ -518,12 +633,19 @@ func (m *HubManager) Start() error {
 		streamWg.Wait() // Ensure all remaining output is drained and processed
 		m.mu.Lock()
 		m.isRunning = false
-		if err != nil {
+		intentional := m.stopping
+		if intentional {
+			m.setStatusLocked(HubStatusStopped, "")
+		} else if err != nil {
 			m.setStatusLocked(HubStatusError, err.Error())
 		} else {
-			m.setStatusLocked(HubStatusStopped, "")
+			m.setStatusLocked(HubStatusStopped, "AGY Hub exited")
 		}
 		m.mu.Unlock()
+		if !intentional {
+			log.Printf("\033[1;31m[Hub Supervisor]\033[0m AGY Hub process exited unexpectedly (%v) -> scheduling restart", err)
+			m.scheduleRestart()
+		}
 		processExited <- err
 		select {
 		case <-doneChan:
@@ -541,7 +663,10 @@ func (m *HubManager) Start() error {
 
 	for time.Since(startTime) < timeout {
 		if !m.IsRunning() {
-			return nil
+			m.dumpRecentLogs()
+			errMsg := fmt.Sprintf("AGY Hub process stopped before port %s became ready", m.HubPort)
+			m.setStatus(HubStatusError, errMsg)
+			return errors.New(errMsg)
 		}
 
 		select {
@@ -568,11 +693,16 @@ func (m *HubManager) Start() error {
 		if tok != "" {
 			m.csrfToken = tok
 		}
+		m.onlineSince = time.Now()
 		m.setStatusLocked(HubStatusOnline, "")
 		m.mu.Unlock()
 		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
 	} else if m.IsRunning() {
 		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
+		m.dumpRecentLogs()
+		errMsg := fmt.Sprintf("AGY Hub did not open port %s within %v", m.HubPort, timeout)
+		m.setStatus(HubStatusError, errMsg)
+		return errors.New(errMsg)
 	}
 
 	return nil
@@ -587,6 +717,7 @@ func (m *HubManager) Stop() {
 	isExternal := m.isExternal
 	doneChan := m.processDone
 	m.isRunning = false
+	m.stopping = true
 	select {
 	case <-m.monitorStop:
 	default:

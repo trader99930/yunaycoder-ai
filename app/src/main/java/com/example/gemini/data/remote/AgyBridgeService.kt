@@ -129,11 +129,11 @@ class AgyBridgeService(
         val instance by lazy { AgyBridgeService() }
     }
 
-    // Fast-failing client for localhost health/status checks (500ms connect timeout)
+    // Fast-failing client for localhost health/status checks (still tolerates a busy proot rootfs)
     val fastClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(500, TimeUnit.MILLISECONDS)
-        .readTimeout(1000, TimeUnit.MILLISECONDS)
-        .writeTimeout(1000, TimeUnit.MILLISECONDS)
+        .connectTimeout(1200, TimeUnit.MILLISECONDS)
+        .readTimeout(2500, TimeUnit.MILLISECONDS)
+        .writeTimeout(2500, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()

@@ -64,7 +64,19 @@ class AgyHubClient {
     suspend fun getOrFetchCsrfToken(
         hubUrl: String = AuthPreferences.currentHubUrl,
         forceRefresh: Boolean = false
-    ): String = csrfManager.getCsrfToken(hubUrl, forceRefresh)
+    ): String {
+        val cached = csrfManager.token
+        if (!forceRefresh && cached.isNotBlank()) return cached
+        val fetched = AgyBridgeService.instance
+            .fetchServerStatus(AuthPreferences.currentBridgeHttpUrl)
+            ?.csrfToken
+            .orEmpty()
+        if (fetched.isNotBlank()) {
+            csrfManager.setCachedToken(hubUrl, fetched)
+            return fetched
+        }
+        return cached
+    }
 
     fun clearCsrfToken() {
         csrfManager.clearToken()

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -83,6 +84,36 @@ func ResolveToken(cliToken string) string {
 	return newToken
 }
 
+// binaryContains reports whether the file at path already contains needle. It only reads the file, so it can
+// never fail with ETXTBSY ("text file busy") even while the binary is executing.
+func binaryContains(path string, needle []byte) bool {
+	if path == "" || len(needle) == 0 {
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil || fi.Size() < int64(len(needle)) {
+		return false
+	}
+	size := int(fi.Size())
+
+	if data, mmapErr := syscall.Mmap(int(f.Fd()), 0, size, syscall.PROT_READ, syscall.MAP_SHARED); mmapErr == nil {
+		defer syscall.Munmap(data)
+		return bytes.Contains(data, needle)
+	}
+
+	buf := make([]byte, size)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+	return bytes.Contains(buf, needle)
+}
+
 // PatchAgyHeader rotates the CSRF header in the target binary in-place to the 20-byte framed header.
 func PatchAgyHeader(binaryPath string, token string) (string, time.Duration, error) {
 	t0 := time.Now()
@@ -109,6 +140,13 @@ func PatchAgyHeader(binaryPath string, token string) (string, time.Duration, err
 	newHeader := []byte(newHeaderStr)
 	prefixBytes := []byte(Prefix)
 	suffixBytes := []byte(Suffix)
+
+	// Fast read-only path: the binary is already patched with this token (the common case when the bridge is
+	// restarted while an older agy process still holds the file). Opening O_RDWR on a running executable fails
+	// with ETXTBSY, so detect the already-patched state without writing.
+	if binaryContains(binaryPath, newHeader) {
+		return newHeaderStr, time.Since(t0), nil
+	}
 
 	file, err := os.OpenFile(binaryPath, os.O_RDWR, 0755)
 	if err != nil {

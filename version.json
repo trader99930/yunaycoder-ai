@@ -1,12 +1,16 @@
 {
-  "version_code": 117,
-  "version_name": "1.0.16",
+  "version_code": 118,
+  "version_name": "1.0.17",
   "min_supported_version_code": 1,
   "changelog": [
-    "Rebranded as YunayCoder AI",
-    "Added standard variant (com.yunaycoder.ai) that installs alongside Termux without package conflicts",
-    "Enabled v1/v2/v3 APK signing for better device compatibility",
-    "Fixed class, manifest and resource name issues from rebranding"
+    "AGY Hub auto-starts in the background on app launch without blocking the bridge API or shutdown",
+    "Fixed 'text file busy' security-header patch failure when restarting while an old AGY process is still running",
+    "Added automatic AGY Hub restart with exponential backoff (2s-30s, max 5 attempts) after unexpected crashes",
+    "Hub readiness timeout and early process exit now surface clear errors with captured logs instead of staying stuck",
+    "Added automatic local bridge restart after unexpected exits (user stop is not restarted)",
+    "Fixed stale CSRF token causing MCP servers and RPC calls to fail after a hub restart (auto refresh + one retry)",
+    "Increased localhost health-check timeouts so a busy proot rootfs is not reported offline",
+    "Restored the termux rootfs download URL broken during rebranding"
   ],
   "is_critical": false
 }
