@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 
-class YunayCoder AIDeviceAdminReceiver : DeviceAdminReceiver() {
+class YunayCoderAiDeviceAdminReceiver : DeviceAdminReceiver() {
 
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
@@ -23,7 +23,7 @@ class YunayCoder AIDeviceAdminReceiver : DeviceAdminReceiver() {
         private const val TAG = "YunayCoder AIDeviceAdmin"
 
         fun getComponentName(context: Context): ComponentName {
-            return ComponentName(context, YunayCoder AIDeviceAdminReceiver::class.java)
+            return ComponentName(context, YunayCoderAiDeviceAdminReceiver::class.java)
         }
 
         fun isAdminActive(context: Context): Boolean {

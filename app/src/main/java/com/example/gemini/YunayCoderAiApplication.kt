@@ -3,7 +3,7 @@ package com.example.gemini
 import android.app.Application
 import com.telemetrydeck.sdk.TelemetryDeck
 
-class YunayCoder AIApplication : Application() {
+class YunayCoderAiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         TelemetryDeck.start(

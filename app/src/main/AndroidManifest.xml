@@ -34,7 +34,7 @@
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
-        android:name=".YunayCoder AIApplication"
+        android:name=".YunayCoderAiApplication"
         android:allowBackup="true"
         android:largeHeap="true"
         android:hasFragileUserData="true"
@@ -273,7 +273,7 @@
 
         <!-- Device Admin Receiver for Accidental Uninstall Protection -->
         <receiver
-            android:name="com.example.gemini.data.admin.YunayCoder AIDeviceAdminReceiver"
+            android:name="com.example.gemini.data.admin.YunayCoderAiDeviceAdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="true">
             <meta-data

@@ -22,7 +22,7 @@ data class DiagnosticsSnapshot(
     val topBlockedThreads: List<String> = emptyList()
 )
 
-object YunayCoder AILiveDiagnostics {
+object YunayCoderAiLiveDiagnostics {
     private val _snapshot = MutableStateFlow(DiagnosticsSnapshot())
     val snapshot: StateFlow<DiagnosticsSnapshot> = _snapshot.asStateFlow()
 
