@@ -35,6 +35,9 @@ android {
             storePassword = "123456"
             keyAlias = "yunaycoder"
             keyPassword = "123456"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
