@@ -72,7 +72,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import android.util.Log
-import com.example.gemini.data.admin.YunayCoder AIDeviceAdminReceiver
+import com.example.gemini.data.admin.YunayCoderAiDeviceAdminReceiver
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -6155,21 +6155,21 @@ private fun DataProtectionSubScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var isAdminActive by remember { mutableStateOf(YunayCoder AIDeviceAdminReceiver.isAdminActive(context)) }
+    var isAdminActive by remember { mutableStateOf(YunayCoderAiDeviceAdminReceiver.isAdminActive(context)) }
     var isShieldEnabled by remember { mutableStateOf(ManageSpaceActivity.isShieldEnabled(context)) }
     var showDeactivateAdminDialog by remember { mutableStateOf(false) }
 
     val adminLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        isAdminActive = YunayCoder AIDeviceAdminReceiver.isAdminActive(context)
+        isAdminActive = YunayCoderAiDeviceAdminReceiver.isAdminActive(context)
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                isAdminActive = YunayCoder AIDeviceAdminReceiver.isAdminActive(context)
+                isAdminActive = YunayCoderAiDeviceAdminReceiver.isAdminActive(context)
                 isShieldEnabled = ManageSpaceActivity.isShieldEnabled(context)
             }
         }
@@ -6287,12 +6287,12 @@ private fun DataProtectionSubScreen(
                     Button(
                         onClick = {
                             try {
-                                val intent = YunayCoder AIDeviceAdminReceiver.createActivationIntent(context)
+                                val intent = YunayCoderAiDeviceAdminReceiver.createActivationIntent(context)
                                 adminLauncher.launch(intent)
                             } catch (e: Exception) {
                                 Log.w("SettingsDialog", "Direct admin prompt failed, opening Device Admin settings", e)
                                 try {
-                                    context.startActivity(YunayCoder AIDeviceAdminReceiver.createDeviceAdminSettingsIntent())
+                                    context.startActivity(YunayCoderAiDeviceAdminReceiver.createDeviceAdminSettingsIntent())
                                 } catch (e2: Exception) {
                                     Toast.makeText(context, "Could not open Device Admin: ${e2.message}", Toast.LENGTH_SHORT).show()
                                 }
@@ -6311,7 +6311,7 @@ private fun DataProtectionSubScreen(
                     OutlinedButton(
                         onClick = {
                             try {
-                                context.startActivity(YunayCoder AIDeviceAdminReceiver.createDeviceAdminSettingsIntent())
+                                context.startActivity(YunayCoderAiDeviceAdminReceiver.createDeviceAdminSettingsIntent())
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Could not open settings: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
@@ -6451,11 +6451,11 @@ private fun DataProtectionSubScreen(
                 Button(
                     onClick = {
                         showDeactivateAdminDialog = false
-                        YunayCoder AIDeviceAdminReceiver.deactivateAdmin(context)
+                        YunayCoderAiDeviceAdminReceiver.deactivateAdmin(context)
                         isAdminActive = false
                         scope.launch {
                             delay(300)
-                            isAdminActive = YunayCoder AIDeviceAdminReceiver.isAdminActive(context)
+                            isAdminActive = YunayCoderAiDeviceAdminReceiver.isAdminActive(context)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
