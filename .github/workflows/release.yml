@@ -49,7 +49,7 @@ jobs:
       - name: Generate Signing Keystore
         run: |
           echo "Generating signing keystore for build..."
-          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -passin pass:123456 -passout pass:123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
+          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -storepass 123456 -keypass 123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
 
       - name: Build Release APKs
         run: |
