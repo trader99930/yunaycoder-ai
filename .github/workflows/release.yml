@@ -46,16 +46,10 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Restore or Generate Keystore
-        env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      - name: Generate Signing Keystore
         run: |
-          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "Warning: RELEASE_KEYSTORE_BASE64 secret is missing. Generating a temporary keystore for build..."
-            keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -passin pass:123456 -passout pass:123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
-          else
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > app/release.jks
-          fi
+          echo "Generating signing keystore for build..."
+          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -passin pass:123456 -passout pass:123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
 
       - name: Build Release APKs
         run: |
