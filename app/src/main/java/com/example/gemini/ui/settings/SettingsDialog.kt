@@ -8250,15 +8250,15 @@ private fun DiagnosticsSubScreen(
     cardBorder: BorderStroke
 ) {
     DisposableEffect(isFloatingDiagnosticsEnabled) {
-        com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics.start()
+        com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics.start()
         onDispose {
             if (!isFloatingDiagnosticsEnabled) {
-                com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics.stop()
+                com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics.stop()
             }
         }
     }
 
-    val snapshot by com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics.snapshot.collectAsState()
+    val snapshot by com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics.snapshot.collectAsState()
     val logs by com.example.gemini.data.remote.inspector.NetworkInspectorManager.logs.collectAsState()
     val activeStreams by com.example.gemini.data.remote.inspector.NetworkInspectorManager.activeStreamsCount.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current

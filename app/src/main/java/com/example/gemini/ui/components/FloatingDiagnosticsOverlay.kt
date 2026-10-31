@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics
+import com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics
 import kotlin.math.roundToInt
 
 @Composable
@@ -36,7 +36,7 @@ fun FloatingDiagnosticsOverlay(
     modifier: Modifier = Modifier,
     onDismiss: (() -> Unit)? = null
 ) {
-    val snapshot by YunayCoder AILiveDiagnostics.snapshot.collectAsState()
+    val snapshot by YunayCoderAiLiveDiagnostics.snapshot.collectAsState()
 
     var isExpanded by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(true) }

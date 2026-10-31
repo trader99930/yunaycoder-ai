@@ -80,7 +80,7 @@ object ConversationExportHelper {
             }
 
             // Save to Downloads/YunayCoder AI/Exports
-            val (savedUri, mimeType, savedFileName) = saveToYunayCoder AIExports(context, fileName, content, format.mimeType)
+            val (savedUri, mimeType, savedFileName) = saveToYunaycoderAiExports(context, fileName, content, format.mimeType)
 
             withContext(Dispatchers.Main) {
                 if (savedUri != null) {
@@ -128,7 +128,7 @@ object ConversationExportHelper {
         }
     }
 
-    private fun saveToYunayCoder AIExports(
+    private fun saveToYunaycoderAiExports(
         context: Context,
         fileName: String,
         content: String,

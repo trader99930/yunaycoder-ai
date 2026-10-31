@@ -144,9 +144,9 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(isFloatingDiagnosticsEnabled) {
                 if (isFloatingDiagnosticsEnabled) {
-                    com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics.start()
+                    com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics.start()
                 } else {
-                    com.example.gemini.data.remote.core.YunayCoder AILiveDiagnostics.stop()
+                    com.example.gemini.data.remote.core.YunayCoderAiLiveDiagnostics.stop()
                 }
             }
 
