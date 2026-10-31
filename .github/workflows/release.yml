@@ -46,10 +46,19 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Generate Signing Keystore
+      - name: Prepare Signing Keystore
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
         run: |
-          echo "Generating signing keystore for build..."
-          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -storepass 123456 -keypass 123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
+          # One persistent keystore so every release keeps the same signing identity and in-place updates work.
+          if [ -n "$RELEASE_KEYSTORE_B64" ]; then
+            echo "Restoring persistent signing keystore from RELEASE_KEYSTORE_B64 secret..."
+            printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > app/release.jks
+          else
+            echo "::warning::RELEASE_KEYSTORE_B64 secret is missing; generating a throwaway keystore (builds will NOT update in place)."
+            keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias yunaycoder -storepass 123456 -keypass 123456 -dname "CN=YunayCoder, OU=AI, O=Yunay, L=Unknown, ST=Unknown, C=IN"
+          fi
+          keytool -list -keystore app/release.jks -storepass 123456 | grep -q "yunaycoder" || { echo "Keystore does not contain alias yunaycoder"; exit 1; }
 
       - name: Build Release APKs
         run: |
