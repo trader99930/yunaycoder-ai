@@ -95,7 +95,7 @@ import kotlinx.serialization.json.JsonPrimitive
 enum class ClaudeSettingsPage(val title: String, val subtitle: String) {
     ACCOUNT("Account & CLI", "Sign-in, plan usage, install and update Claude Code"),
     DEFAULTS("Chat defaults", "Model, effort, thinking, permission mode, output style"),
-    PROVIDERS("Custom providers", "OpenRouter, Kimi and other Anthropic-compatible APIs"),
+    PROVIDERS("Custom providers", "Free presets (DeepSeek, Qwen, Llama, Gemini) and other Anthropic-compatible APIs"),
     PERMISSIONS("Permission rules", "What Claude may do without asking"),
     MCP("MCP servers", "Tools Claude can call"),
     PLUGINS("Plugins", "Installed plugins, catalog and marketplaces"),

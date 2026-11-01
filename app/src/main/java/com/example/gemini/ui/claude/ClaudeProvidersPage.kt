@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,16 +52,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.agent.claude.ClaudeProvider
 import com.example.gemini.data.agent.claude.ClaudeProviderModel
+import com.example.gemini.data.agent.claude.ClaudeProviderPresets
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaRed
 import com.example.gemini.ui.components.ClaudeAccent
-
-private const val OPENROUTER_BASE_URL = "https://openrouter.ai/api"
 
 /**
  * Custom providers: Anthropic-compatible APIs whose models show up in the Claude model picker next to Claude's own.
  * A chat on one runs with that provider's endpoint and key; settings.json and other chats are not changed.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProvidersPage(deps: ClaudeSettingsDeps) {
     val backend = deps.backend
@@ -73,6 +75,7 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
     var importing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { backend.refreshProviders() }
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    val openRouter = providers.firstOrNull { ClaudeProviderPresets.isOpenRouter(it.base_url) }
 
     Text("Other Anthropic-compatible APIs", fontWeight = FontWeight.Bold, fontSize = 14.sp)
     Text(
@@ -102,9 +105,55 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (providers.none { it.openrouter }) {
-            OutlinedButton(onClick = { editing = ClaudeProvider(name = "OpenRouter", base_url = OPENROUTER_BASE_URL) }) { Text("+ OpenRouter") }
+            OutlinedButton(onClick = {
+                editing = ClaudeProvider(
+                    name = ClaudeProviderPresets.OPENROUTER_NAME,
+                    base_url = ClaudeProviderPresets.OPENROUTER_BASE_URL,
+                    models = ClaudeProviderPresets.defaultModels
+                )
+            }) { Text("+ OpenRouter") }
         }
         OutlinedButton(onClick = { editing = ClaudeProvider() }) { Text("+ Custom provider") }
+    }
+
+    Text("Free model presets", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+    Text(
+        if (openRouter == null) {
+            "Add OpenRouter once with your key; each preset below is then one tap and its models show up in the Claude model picker automatically."
+        } else {
+            "One tap adds a preset's models to \"${openRouter.name}\". Free ids change often; \"Fetch free models\" refreshes the list."
+        },
+        fontSize = 11.5.sp, color = muted
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ClaudeProviderPresets.all.forEach { preset ->
+            OutlinedButton(onClick = {
+                if (openRouter == null) {
+                    editing = ClaudeProvider(
+                        name = ClaudeProviderPresets.OPENROUTER_NAME,
+                        base_url = ClaudeProviderPresets.OPENROUTER_BASE_URL,
+                        models = preset.models
+                    )
+                } else {
+                    val merged = ClaudeProviderPresets.merge(openRouter.models, preset.models)
+                    if (merged.size == openRouter.models.size) {
+                        Toast.makeText(context, "${preset.label} is already added", Toast.LENGTH_SHORT).show()
+                    } else {
+                        backend.saveProvider(openRouter.copy(models = merged)) { err ->
+                            Toast.makeText(context, err ?: "${preset.label} added", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }) { Text(preset.label) }
+        }
+        if (openRouter != null) {
+            TextButton(onClick = {
+                val merged = ClaudeProviderPresets.merge(openRouter.models, ClaudeProviderPresets.defaultModels)
+                backend.saveProvider(openRouter.copy(models = merged)) { err ->
+                    Toast.makeText(context, err ?: "All presets added", Toast.LENGTH_SHORT).show()
+                }
+            }) { Text("Add all", color = ClaudeAccent) }
+        }
     }
 
     if (providers.isEmpty()) {
@@ -169,7 +218,20 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
         }
     }
 
-    editing?.let { p -> ProviderDialog(p, onDismiss = { editing = null }) { saved, done -> backend.saveProvider(saved) { err -> done(err); if (err == null) editing = null } } }
+    editing?.let { p ->
+        ProviderDialog(p, onDismiss = { editing = null }) { saved, done ->
+            // a new OpenRouter provider starts with every preset model, so the picker is never empty
+            val provider = if (ClaudeProviderPresets.isOpenRouter(saved.base_url) && saved.models.isEmpty()) {
+                saved.copy(models = ClaudeProviderPresets.defaultModels)
+            } else {
+                saved
+            }
+            backend.saveProvider(provider) { err ->
+                done(err)
+                if (err == null) editing = null
+            }
+        }
+    }
 
     toDelete?.let { p ->
         AlertDialog(

@@ -1,11 +1,12 @@
 {
-  "version_code": 120,
-  "version_name": "1.0.19",
+  "version_code": 121,
+  "version_name": "1.0.20",
   "min_supported_version_code": 1,
   "changelog": [
-    "Fixed in-place updates: every release is now signed with one persistent keystore, so new versions install over the existing app instead of failing with 'App not installed as package appears to be invalid'",
-    "Note: this one release changes the signing key, so uninstall the old app once and then install 1.0.19; all later updates will install normally",
-    "Includes restored proot/loader binaries (1.0.18) and the hub startup/restart/CSRF fixes (1.0.17)"
+    "Custom providers: one-tap free model presets for DeepSeek, Qwen, Llama and Google Gemini (OpenRouter), with a free Gemma group",
+    "A new OpenRouter provider now starts with every preset model, so the Claude model picker is filled automatically instead of typing model ids by hand",
+    "Preset models merge into an existing OpenRouter provider with duplicate detection, plus an 'Add all' action",
+    "Includes the 1.0.19 persistent signing fix, restored proot/loader binaries and the hub startup/restart/CSRF fixes"
   ],
   "is_critical": true
 }
