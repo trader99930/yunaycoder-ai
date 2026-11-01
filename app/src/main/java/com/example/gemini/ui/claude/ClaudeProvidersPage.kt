@@ -172,6 +172,9 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
                     Text(p.name, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
                     Text(p.base_url, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     p.api_key_hint?.let { Text("Key $it", fontSize = 11.sp, color = muted) }
+                    if (p.openrouter && p.api_key_hint.isNullOrBlank()) {
+                        Text("No API key yet — tap Edit to add your OpenRouter key", fontSize = 11.sp, color = QuotaAmber)
+                    }
                 }
                 IconButton(onClick = { editing = p }) { Icon(Icons.Outlined.Edit, "Edit") }
                 IconButton(onClick = { toDelete = p }) { Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f)) }
@@ -288,14 +291,14 @@ private fun ProviderDialog(initial: ClaudeProvider, onDismiss: () -> Unit, onSav
                     placeholder = { Text("titles & summaries; default: the chat's model") }, modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    if (openRouter) "OpenRouter's model list is fetched automatically (free models)." else "The models URL lets you fetch the provider's model list instead of typing ids.",
+                    if (openRouter) "OpenRouter's model list is fetched automatically (free models). You can save without a key and add it later." else "The models URL lets you fetch the provider's model list instead of typing ids.",
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 )
                 error?.let { Text(it, fontSize = 12.sp, color = QuotaRed) }
             }
         },
         confirmButton = {
-            TextButton(enabled = !saving && name.isNotBlank() && baseUrl.isNotBlank() && (!isNew || key.isNotBlank()), onClick = {
+            TextButton(enabled = !saving && name.isNotBlank() && baseUrl.isNotBlank() && (!isNew || key.isNotBlank() || openRouter), onClick = {
                 saving = true
                 error = null
                 onSave(

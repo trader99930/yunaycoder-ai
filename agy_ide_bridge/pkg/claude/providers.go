@@ -82,6 +82,71 @@ func isOpenRouter(baseURL string) bool {
 	return err == nil && (u.Host == "openrouter.ai" || strings.HasSuffix(u.Host, ".openrouter.ai"))
 }
 
+const openRouterBaseURL = "https://openrouter.ai/api"
+
+// defaultOpenRouterModels mirrors ClaudeProviderPresets.kt in the app: tool-capable models that are free or very
+// cheap on OpenRouter. They are seeded so the app's Claude model picker is populated without typing model ids.
+var defaultOpenRouterModels = []ProviderModel{
+	{ID: "deepseek/deepseek-v4.1-flash", Name: "DeepSeek V4.1 Flash"},
+	{ID: "deepseek/deepseek-chat-v3-0324", Name: "DeepSeek Chat v3"},
+	{ID: "qwen/qwen3-coder", Name: "Qwen3 Coder"},
+	{ID: "qwen/qwen3-235b-a22b-2507", Name: "Qwen3 235B A22B"},
+	{ID: "meta-llama/llama-3.3-70b-instruct", Name: "Llama 3.3 70B"},
+	{ID: "meta-llama/llama-4-scout", Name: "Llama 4 Scout"},
+	{ID: "google/gemini-2.5-flash", Name: "Google Gemini 2.5 Flash"},
+	{ID: "google/gemini-2.5-flash-lite", Name: "Google Gemini 2.5 Flash Lite"},
+	{ID: "google/gemma-4-31b-it:free", Name: "Google Gemma 4 31B (free)"},
+	{ID: "google/gemma-4-26b-a4b-it:free", Name: "Google Gemma 4 26B A4B (free)"},
+}
+
+// presetsMarkerPath records that the presets were seeded once, so a provider the user removes stays removed.
+func (m *Manager) presetsMarkerPath() string {
+	return filepath.Join(m.HomeDir, ".claude", "agy_providers_presets_v1")
+}
+
+// ensureDefaultProviders makes sure an OpenRouter provider lists the built-in presets, so the app's model picker
+// shows them without the user typing model ids. A provider without a key is allowed here; a chat started on it
+// gets a clear "add the API key" error instead of a silent 401.
+func (m *Manager) ensureDefaultProviders() {
+	marker := m.presetsMarkerPath()
+	if _, err := os.Stat(marker); err == nil {
+		return
+	}
+	m.provMu.Lock()
+	f := m.loadProvidersLocked()
+	idx := -1
+	for i, p := range f.Providers {
+		if isOpenRouter(p.BaseURL) {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		f.Providers = append(f.Providers, Provider{
+			ID:      uniqueProviderID(f.Providers, "OpenRouter"),
+			Name:    "OpenRouter",
+			BaseURL: openRouterBaseURL,
+			Models:  append([]ProviderModel{}, defaultOpenRouterModels...),
+		})
+	} else {
+		seen := map[string]bool{}
+		for _, md := range f.Providers[idx].Models {
+			seen[md.ID] = true
+		}
+		for _, md := range defaultOpenRouterModels {
+			if !seen[md.ID] {
+				f.Providers[idx].Models = append(f.Providers[idx].Models, md)
+			}
+		}
+	}
+	err := m.saveProvidersLocked(f)
+	m.provMu.Unlock()
+	if err == nil {
+		_ = os.MkdirAll(filepath.Dir(marker), 0o700)
+		_ = os.WriteFile(marker, []byte("1"), 0o600)
+	}
+}
+
 func (m *Manager) provider(id string) (Provider, bool) {
 	m.provMu.Lock()
 	defer m.provMu.Unlock()
@@ -303,7 +368,8 @@ func (m *Manager) saveProvider(w http.ResponseWriter, id string, p Provider) {
 		}
 		f.Providers[idx] = p
 	} else {
-		if p.APIKey == "" {
+		// OpenRouter may be saved keyless so its preset models show in the picker; the key is asked for on use.
+		if p.APIKey == "" && !isOpenRouter(p.BaseURL) {
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "an API key is required"})
 			return
 		}

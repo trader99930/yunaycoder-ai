@@ -86,6 +86,7 @@ func NewManager(homeDir, defaultCwd, customBin string) *Manager {
 		BinPath:    customBin,
 		sessions:   make(map[string]*Session),
 	}
+	m.ensureDefaultProviders()
 	go m.reapLoop()
 	return m
 }
@@ -331,6 +332,9 @@ func (s *Session) spawnLocked() error {
 		p, ok := s.mgr.provider(providerID)
 		if !ok {
 			return fmt.Errorf("custom provider %q was removed; choose another model", providerID)
+		}
+		if p.APIKey == "" {
+			return fmt.Errorf("no API key saved for provider %q: add it in Settings > Custom providers", p.Name)
 		}
 		settings, err := s.mgr.providerSettingsFile(p, model)
 		if err != nil {

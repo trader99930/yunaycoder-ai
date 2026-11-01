@@ -1,12 +1,13 @@
 {
-  "version_code": 121,
-  "version_name": "1.0.20",
+  "version_code": 122,
+  "version_name": "1.0.21",
   "min_supported_version_code": 1,
   "changelog": [
-    "Custom providers: one-tap free model presets for DeepSeek, Qwen, Llama and Google Gemini (OpenRouter), with a free Gemma group",
-    "A new OpenRouter provider now starts with every preset model, so the Claude model picker is filled automatically instead of typing model ids by hand",
-    "Preset models merge into an existing OpenRouter provider with duplicate detection, plus an 'Add all' action",
-    "Includes the 1.0.19 persistent signing fix, restored proot/loader binaries and the hub startup/restart/CSRF fixes"
+    "Free preset models now appear automatically in the Claude model picker: an OpenRouter provider is seeded with DeepSeek, Qwen, Llama, Gemini and free Gemma models at bridge start",
+    "If you already had an OpenRouter provider, the built-in presets are merged into it once (your API key and own models are kept)",
+    "OpenRouter can be saved without an API key so you can see the preset models first; add the key any time from Settings > Claude Code > Custom providers",
+    "Starting a chat on a provider without a key now shows a clear 'add the API key' error instead of a silent 401",
+    "Includes the 1.0.20 preset UI, 1.0.19 persistent signing fix, restored proot/loader binaries and hub startup/restart/CSRF fixes"
   ],
   "is_critical": true
 }
